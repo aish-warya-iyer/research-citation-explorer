@@ -1,0 +1,494 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Research Citation Explorer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #F3F4F6;
+    --text: #1A2332;
+    --text-muted: #5B6472;
+    --accent: #3B6EA5;
+    --accent-hover: #2F5A87;
+    --accent-tint: #E4ECF4;
+    --card-bg: #FFFFFF;
+    --border: #D7DBE0;
+    --danger: #A3374B;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    max-width: 760px;
+    margin: 2.5rem auto;
+    padding: 0 1rem;
+    line-height: 1.55;
+  }
+
+  h2 {
+    font-family: 'Newsreader', Georgia, serif;
+    font-weight: 600;
+    margin: 0;
+    letter-spacing: -0.01em;
+  }
+
+  input {
+    width: 100%;
+    padding: 0.6rem 0.75rem;
+    font-size: 1rem;
+    box-sizing: border-box;
+    margin-bottom: 0.6rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--card-bg);
+    color: var(--text);
+    font-family: inherit;
+  }
+  input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+  textarea {
+    width: 100%;
+    padding: 0.6rem 0.75rem;
+    font-size: 0.9rem;
+    box-sizing: border-box;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--card-bg);
+    color: var(--text);
+    font-family: inherit;
+    resize: vertical;
+    min-height: 4.5rem;
+  }
+  textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+  .notesBox { margin: 0.6rem 0 0 1.2rem; }
+  .notesBox button { margin-top: 0.4rem; font-size: 0.85rem; padding: 0.35rem 0.8rem; }
+  .notesSaved { font-size: 0.8rem; color: var(--text-muted); margin-left: 0.5rem; }
+
+  button {
+    padding: 0.5rem 1rem;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 0.95rem;
+    border: 1px solid var(--accent);
+    border-radius: 6px;
+    background: var(--accent);
+    color: white;
+    transition: background 0.15s ease;
+  }
+  button:hover { background: var(--accent-hover); }
+
+  a { color: var(--accent); }
+  a:hover { color: var(--accent-hover); }
+
+  .paper, .collectionItem {
+    position: relative;
+    border: 1px solid var(--border);
+    background: var(--card-bg);
+    padding: 0.9rem 1rem 0.9rem 2.15rem;
+    margin: 0.6rem 0;
+    border-radius: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .collectionItem { display: block; }
+
+  .paper::before, .collectionItem::before {
+    content: '';
+    position: absolute;
+    left: 0.8rem;
+    top: 1.35rem;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--accent);
+  }
+  .paper:not(:last-child)::after, .collectionItem:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    left: calc(0.8rem + 3px);
+    top: 1.35rem;
+    width: 1px;
+    height: calc(100% + 0.6rem);
+    background: var(--accent);
+    opacity: 0.25;
+  }
+
+  .paper .meta {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    font-family: 'SF Mono', Menlo, Consolas, monospace;
+  }
+
+  .summary { font-size: 0.9rem; margin-top: 0.5rem; }
+  .summary .tag {
+    background: var(--accent-tint);
+    color: var(--accent);
+    padding: 0.15rem 0.4rem;
+    font-size: 0.7rem;
+    border-radius: 4px;
+    letter-spacing: 0.02em;
+  }
+
+  #modal { display: none; position: fixed; inset: 0; background: rgba(26,35,50,0.45); align-items: center; justify-content: center; }
+  #modal .box {
+    background: var(--card-bg);
+    padding: 1.75rem;
+    max-width: 400px;
+    border-radius: 10px;
+    box-shadow: 0 10px 40px rgba(26,35,50,0.2);
+  }
+  #modal .box p { font-family: 'Newsreader', Georgia, serif; font-size: 1.05rem; margin-top: 0; }
+
+  #topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.75rem; }
+  #topbar h2 { font-size: 1.5rem; }
+
+  #collectionNameRow { display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.75rem; }
+  #collectionNameRow input { margin-bottom: 0; }
+  #collectionNameRow label { font-size: 0.9rem; color: var(--text-muted); white-space: nowrap; }
+
+  .collectionPapers { margin: 0.6rem 0 0 1.2rem; font-size: 0.9rem; }
+  .navLink { cursor: pointer; color: var(--accent); }
+  .navLink:hover { color: var(--accent-hover); }
+
+  #authBox {
+    max-width: 340px;
+    margin: 5rem auto;
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 2rem;
+    box-shadow: 0 4px 24px rgba(26,35,50,0.08);
+  }
+  #authBox h2 { text-align: center; margin-bottom: 1.5rem; }
+  #authTitle { font-weight: 600; margin-bottom: 0.75rem; color: var(--text-muted); text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.06em; }
+  #authBox button { width: 100%; }
+  #authBox .error { color: var(--danger); font-size: 0.85rem; margin-top: 0.5rem; }
+  #authBox .switch { font-size: 0.85rem; margin-top: 1rem; text-align: center; color: var(--text-muted); }
+  #authBox .switch a { cursor: pointer; }
+
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+
+<div id="authBox">
+  <h2>Research Citation Explorer</h2>
+  <div id="authTitle">Log in</div>
+  <input id="authEmail" type="email" placeholder="Email" />
+  <input id="authPassword" type="password" placeholder="Password (min 8 chars, upper/lower/number/symbol)" />
+  <button id="authSubmit">Log in</button>
+  <div class="error" id="authError"></div>
+  <div class="switch">
+    <span id="switchToSignup">No account? <a>Sign up</a></span>
+    <span id="switchToLogin" class="hidden">Have an account? <a>Log in</a></span>
+  </div>
+</div>
+
+<div id="app" class="hidden">
+  <div id="topbar">
+    <h2>Research Citation Explorer</h2>
+    <div>
+      <span id="userEmail"></span> &middot;
+      <a class="navLink" id="collectionsLink">my collections</a>
+      <a class="navLink hidden" id="searchLink">search</a>
+      &middot; <a id="logoutLink" href="#">log out</a>
+    </div>
+  </div>
+
+  <div id="searchView">
+    <input id="q" placeholder="Search a topic, e.g. graph neural networks" />
+    <div id="collectionNameRow">
+      <label for="collectionName" style="white-space:nowrap">Save into:</label>
+      <input id="collectionName" placeholder="My Reading List (default)" />
+    </div>
+    <div id="results"></div>
+  </div>
+
+  <div id="collectionsView" class="hidden">
+    <div id="collectionsList"></div>
+  </div>
+</div>
+
+<div id="modal">
+  <div class="box">
+    <p>You've saved 3 collections on the free tier. Upgrade to Pro for unlimited saved collections.</p>
+    <button id="upgradeBtn">Upgrade to Pro</button>
+    <button onclick="document.getElementById('modal').style.display='none'">Cancel</button>
+  </div>
+</div>
+
+<script>
+let authToken = localStorage.getItem('authToken');
+let authEmail = localStorage.getItem('authEmail');
+let pendingSave = null;
+let authMode = 'login';
+
+function showApp() {
+  document.getElementById('authBox').classList.add('hidden');
+  document.getElementById('app').classList.remove('hidden');
+  document.getElementById('userEmail').textContent = authEmail;
+  search();
+}
+
+function showAuth() {
+  document.getElementById('authBox').classList.remove('hidden');
+  document.getElementById('app').classList.add('hidden');
+}
+
+document.getElementById('switchToSignup').querySelector('a').onclick = () => {
+  authMode = 'signup';
+  document.getElementById('authTitle').textContent = 'Sign up';
+  document.getElementById('authSubmit').textContent = 'Sign up';
+  document.getElementById('switchToSignup').classList.add('hidden');
+  document.getElementById('switchToLogin').classList.remove('hidden');
+};
+document.getElementById('switchToLogin').querySelector('a').onclick = () => {
+  authMode = 'login';
+  document.getElementById('authTitle').textContent = 'Log in';
+  document.getElementById('authSubmit').textContent = 'Log in';
+  document.getElementById('switchToLogin').classList.add('hidden');
+  document.getElementById('switchToSignup').classList.remove('hidden');
+};
+
+document.getElementById('authSubmit').onclick = async () => {
+  const email = document.getElementById('authEmail').value;
+  const password = document.getElementById('authPassword').value;
+  const errorEl = document.getElementById('authError');
+  errorEl.textContent = '';
+  const res = await fetch(`/api/auth/${authMode}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password })
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    errorEl.textContent = data.message || data.error || 'Something went wrong';
+    return;
+  }
+  authToken = data.access_token;
+  authEmail = data.user.email;
+  localStorage.setItem('authToken', authToken);
+  localStorage.setItem('authEmail', authEmail);
+  showApp();
+};
+
+document.getElementById('logoutLink').onclick = async (e) => {
+  e.preventDefault();
+  await fetch('/api/auth/logout', { method: 'POST', headers: { 'Authorization': `Bearer ${authToken}` } });
+  authToken = null;
+  authEmail = null;
+  localStorage.removeItem('authToken');
+  localStorage.removeItem('authEmail');
+  showAuth();
+};
+
+function authHeaders() {
+  return { 'Authorization': `Bearer ${authToken}` };
+}
+
+async function search() {
+  const q = document.getElementById('q').value;
+  const res = await fetch(`/api/papers?q=${encodeURIComponent(q)}`, { headers: authHeaders() });
+  if (res.status === 401) { showAuth(); return; }
+  const papers = await res.json();
+  const container = document.getElementById('results');
+  container.innerHTML = '';
+  papers.forEach(p => {
+    const div = document.createElement('div');
+    div.className = 'paper';
+    div.innerHTML = `
+      <div>
+        <div><a href="https://www.semanticscholar.org/paper/${p.paperId}" target="_blank" rel="noopener noreferrer">${p.title}</a></div>
+        <div class="meta">${p.year || ''} &middot; ${p.citationCount} citations</div>
+        ${p.summary ? `<div class="summary"><span class="tag">AI-generated summary (RocketRide + Butterbase gateway)</span> ${p.summary}</div>` : ''}
+      </div>
+      <div>
+        <button onclick='save(${JSON.stringify(p.paperId)}, ${JSON.stringify(p.title)})'>Save to collection</button>
+        <span class="saved-${p.paperId}"></span>
+      </div>
+    `;
+    container.appendChild(div);
+  });
+}
+
+async function save(paperId, title) {
+  const collectionName = document.getElementById('collectionName').value;
+  const res = await fetch('/api/save', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ paperId, title, collectionName })
+  });
+  if (res.status === 401) { showAuth(); return; }
+  if (res.status === 402) {
+    pendingSave = { paperId, title };
+    document.getElementById('modal').style.display = 'flex';
+    return;
+  }
+  const el = document.querySelector(`.saved-${CSS.escape(paperId)}`);
+  if (el) el.textContent = ' Saved!';
+}
+
+document.getElementById('upgradeBtn').onclick = async () => {
+  await fetch('/api/upgrade', { method: 'POST', headers: authHeaders() });
+  document.getElementById('modal').style.display = 'none';
+  if (pendingSave) {
+    await save(pendingSave.paperId, pendingSave.title);
+    pendingSave = null;
+  }
+};
+
+document.getElementById('q').addEventListener('keydown', e => { if (e.key === 'Enter') search(); });
+
+function showSearchView() {
+  document.getElementById('searchView').classList.remove('hidden');
+  document.getElementById('collectionsView').classList.add('hidden');
+  document.getElementById('collectionsLink').classList.remove('hidden');
+  document.getElementById('searchLink').classList.add('hidden');
+}
+
+function showCollectionsView() {
+  document.getElementById('searchView').classList.add('hidden');
+  document.getElementById('collectionsView').classList.remove('hidden');
+  document.getElementById('collectionsLink').classList.add('hidden');
+  document.getElementById('searchLink').classList.remove('hidden');
+  loadCollections();
+}
+
+document.getElementById('collectionsLink').onclick = showCollectionsView;
+document.getElementById('searchLink').onclick = showSearchView;
+
+async function loadCollections() {
+  const list = document.getElementById('collectionsList');
+  list.innerHTML = '<p>Loading...</p>';
+  let collections;
+  try {
+    const res = await fetch('/api/collections', { headers: authHeaders() });
+    if (res.status === 401) { showAuth(); return; }
+    if (!res.ok) {
+      list.innerHTML = `<p style="color:var(--danger)">Error ${res.status}: ${await res.text()}</p>`;
+      return;
+    }
+    collections = await res.json();
+  } catch (err) {
+    list.innerHTML = `<p style="color:var(--danger)">Fetch failed: ${err}</p>`;
+    return;
+  }
+  if (!Array.isArray(collections) || collections.length === 0) {
+    list.innerHTML = '<p>No collections saved yet.</p>';
+    return;
+  }
+  list.innerHTML = '';
+  collections.forEach(c => {
+    const item = document.createElement('div');
+    item.className = 'collectionItem';
+
+    const header = document.createElement('strong');
+    header.textContent = c.name;
+    header.style.cursor = 'pointer';
+    item.appendChild(header);
+
+    const deleteLink = document.createElement('a');
+    deleteLink.textContent = 'delete collection';
+    deleteLink.style.cssText = 'margin-left:0.75rem; font-size:0.8rem; color:var(--danger); cursor:pointer;';
+    item.appendChild(deleteLink);
+
+    const papersDiv = document.createElement('div');
+    papersDiv.className = 'collectionPapers hidden';
+    item.appendChild(papersDiv);
+
+    const notesBox = document.createElement('div');
+    notesBox.className = 'notesBox hidden';
+    const notesArea = document.createElement('textarea');
+    notesArea.placeholder = 'Notes for this collection...';
+    notesArea.value = c.notes || '';
+    const notesSaveBtn = document.createElement('button');
+    notesSaveBtn.textContent = 'Save notes';
+    const notesSavedMsg = document.createElement('span');
+    notesSavedMsg.className = 'notesSaved';
+    notesBox.appendChild(notesArea);
+    notesBox.appendChild(notesSaveBtn);
+    notesBox.appendChild(notesSavedMsg);
+    item.appendChild(notesBox);
+
+    notesSaveBtn.onclick = async () => {
+      notesSavedMsg.textContent = '';
+      const res = await fetch(`/api/collections/${c.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({ notes: notesArea.value })
+      });
+      if (res.status === 401) { showAuth(); return; }
+      if (!res.ok) { alert(`Save failed: ${res.status} ${await res.text()}`); return; }
+      notesSavedMsg.textContent = 'Saved!';
+    };
+
+    // Toggle listener lives only on the name itself, not the whole card --
+    // so clicks inside the expanded paper list (title links, remove) can
+    // never accidentally bubble into a collapse, no stopPropagation needed.
+    header.onclick = async () => {
+      if (!papersDiv.classList.contains('hidden')) {
+        papersDiv.classList.add('hidden');
+        notesBox.classList.add('hidden');
+        return;
+      }
+      await renderCollectionPapers(c.id, papersDiv);
+      papersDiv.classList.remove('hidden');
+      notesBox.classList.remove('hidden');
+    };
+
+    deleteLink.onclick = async () => {
+      if (!confirm(`Delete "${c.name}" and all papers in it?`)) return;
+      const res = await fetch(`/api/collections/${c.id}`, { method: 'DELETE', headers: authHeaders() });
+      if (res.status === 401) { showAuth(); return; }
+      if (!res.ok) { alert(`Delete failed: ${res.status} ${await res.text()}`); return; }
+      loadCollections();
+    };
+
+    list.appendChild(item);
+  });
+}
+
+async function renderCollectionPapers(collectionId, papersDiv) {
+  const r = await fetch(`/api/collections/${collectionId}/papers`, { headers: authHeaders() });
+  const papers = await r.json();
+  papersDiv.innerHTML = papers.length
+    ? papers.map(p => `
+        <div>
+          &middot; <a href="https://www.semanticscholar.org/paper/${p.paper_id}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">${p.title}</a>
+          <a onclick='removePaper(${JSON.stringify(p.id)}, ${JSON.stringify(collectionId)}, this)' style="margin-left:0.5rem; font-size:0.8rem; color:var(--danger); cursor:pointer;">remove</a>
+        </div>
+      `).join('')
+    : '<div>(empty)</div>';
+}
+
+async function removePaper(itemId, collectionId, linkEl) {
+  const papersDiv = linkEl.closest('.collectionPapers');
+  try {
+    const res = await fetch(`/api/collection_papers/${itemId}`, { method: 'DELETE', headers: authHeaders() });
+    if (res.status === 401) { showAuth(); return; }
+    if (!res.ok) {
+      alert(`Remove failed: ${res.status} ${await res.text()}`);
+      return;
+    }
+    await renderCollectionPapers(collectionId, papersDiv);
+  } catch (err) {
+    alert(`Remove failed: ${err}`);
+  }
+}
+
+if (authToken) {
+  showApp();
+} else {
+  showAuth();
+}
+</script>
+</body>
+</html>

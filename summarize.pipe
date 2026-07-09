@@ -1,0 +1,47 @@
+{
+  "project_id": "research-explorer",
+  "source": "trigger",
+  "components": [
+    {
+      "id": "trigger",
+      "provider": "webhook",
+      "config": {}
+    },
+    {
+      "id": "agent",
+      "provider": "agent_rocketride",
+      "config": {
+        "agent_description": "Summarizes research paper text for a citation explorer tool.",
+        "instructions": [],
+        "max_waves": 3
+      },
+      "input": [{ "lane": "questions", "from": "trigger" }]
+    },
+    {
+      "id": "memory",
+      "provider": "memory_internal",
+      "config": {},
+      "control": [{ "classType": "memory", "from": "agent" }]
+    },
+    {
+      "id": "summarizer",
+      "provider": "llm_openai_api",
+      "config": {
+        "profile": "custom",
+        "custom": {
+          "apikey": "${ROCKETRIDE_BUTTERBASE_GATEWAY_API_KEY}",
+          "base_url": "https://api.butterbase.ai/v1",
+          "model": "anthropic/claude-3-haiku",
+          "modelTotalTokens": 1024
+        }
+      },
+      "control": [{ "classType": "llm", "from": "agent" }]
+    },
+    {
+      "id": "out",
+      "provider": "response_answers",
+      "config": { "laneName": "summary" },
+      "input": [{ "lane": "answers", "from": "agent" }]
+    }
+  ]
+}
