@@ -1,12 +1,18 @@
 # Research Citation & Idea Explorer
 
+Live: https://research-explorer.butterbase.dev
+
 ## Stack
 - **Neo4j Aura**: 300-paper "graph neural networks" citation graph (`ingest.py`, `schema.py`, `queries.py`) -- Cypher traversals for citation paths, co-authorship centrality, topic search.
-- **Butterbase**: auth, `collections`/`collection_papers` tables with RLS, `create-collection` function enforcing a 3-collection free tier, Stripe Connect Pro plan.
+- **Butterbase**: auth, `collections`/`collection_papers` tables with RLS (including a per-collection `notes` field), `create-collection` function enforcing a 3-collection free tier via a real billing-subscription check, Stripe Connect Pro plan, and two more Functions: `search-papers` (queries Neo4j) and `save-paper` (find-or-create collection + attach paper).
 - **RocketRide Cloud**: webhook-triggered pipeline calling Butterbase's AI gateway (`summarize.pipe`).
-- **Frontend**: `server.py` (FastAPI) + `static/index.html` -- search, save-to-collection, paywall, upgrade.
+- **Frontend**: `static/index.html` alone -- a pure static page that calls Butterbase's Auth API, REST API, and the two Functions above directly (RLS scopes every read/write to the caller's own JWT). No backend proxy in production. `server.py` is a two-line static file server that exists only for local dev convenience.
 
-Run: `python3 -m uvicorn server:app --port 8000`, open `http://127.0.0.1:8000`.
+Run locally: `python3 -m uvicorn server:app --port 8000`, open `http://127.0.0.1:8000` -- it talks to the same live Butterbase backend as the deployed URL, so behavior is identical either way.
+
+## Why there are two copies of the search/save logic
+
+`queries.py` (Python, uses the `neo4j` bolt driver) is for the one-time ingestion/batch-summarization scripts run from a terminal. The deployed `search-papers` Function is a separate TypeScript port that calls Neo4j Aura's HTTP Query API instead, because Butterbase Functions run in a JS isolate runtime with no raw TCP/bolt socket support -- the Python driver simply can't run there. Same Cypher, two transports.
 
 ## RocketRide summarization pipeline (resolved)
 
@@ -24,4 +30,4 @@ Two real platform bugs had to be found and worked around to get here:
 
 ## Known issue: Stripe Connect live mode
 
-Butterbase's Stripe Connect onboarding for this app issued a **live-mode** Checkout session (`cs_live_...`) with no documented per-app or per-account test-mode toggle (checked `billing`, `integrations`, and `platform` docs topics, plus the dashboard). `stripe_checkout_real.py` contains the real, verified-working Checkout session creation call -- confirmed functional, but deliberately not wired to the frontend's "Upgrade" button to avoid risking a real charge during development or demo. The frontend's upgrade flow instead uses a service-role bypass insert (`server.py`, `/api/upgrade`) that reproduces the exact behavior an active subscription would produce.
+Butterbase's Stripe Connect onboarding for this app issued a **live-mode** Checkout session (`cs_live_...`) with no documented per-app or per-account test-mode toggle (checked `billing`, `integrations`, and `platform` docs topics, plus the dashboard). `stripe_checkout_real.py` contains the real, verified-working Checkout session creation call -- confirmed functional, but deliberately not wired to the frontend's "Upgrade" button to avoid risking a real charge during development or demo. The frontend's upgrade flow instead sets a local flag that the `save-paper` Function honors as `bypassPaywall`: it does a plain RLS-scoped insert (`user_id = current_user_id()`) that skips `create-collection`'s quota check without touching real billing -- same demo-safe behavior as before, now living server-side in the Function instead of the old FastAPI proxy.

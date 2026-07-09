@@ -226,10 +226,16 @@
 </div>
 
 <script>
+const BUTTERBASE_APP_ID = 'app_574gyfj21hcu';
+const BUTTERBASE_API_BASE = `https://api.butterbase.ai/v1/${BUTTERBASE_APP_ID}`;
+const BUTTERBASE_AUTH_BASE = `https://api.butterbase.ai/auth/${BUTTERBASE_APP_ID}`;
+const BUTTERBASE_FN_BASE = `${BUTTERBASE_API_BASE}/fn`;
+
 let authToken = localStorage.getItem('authToken');
 let authEmail = localStorage.getItem('authEmail');
 let pendingSave = null;
 let authMode = 'login';
+let isPro = localStorage.getItem('isPro') === 'true';
 
 function showApp() {
   document.getElementById('authBox').classList.add('hidden');
@@ -263,7 +269,23 @@ document.getElementById('authSubmit').onclick = async () => {
   const password = document.getElementById('authPassword').value;
   const errorEl = document.getElementById('authError');
   errorEl.textContent = '';
-  const res = await fetch(`/api/auth/${authMode}`, {
+
+  if (authMode === 'signup') {
+    // Butterbase signup doesn't return a token -- log in immediately after
+    // so the user gets a usable session without a separate verification step.
+    const signupRes = await fetch(`${BUTTERBASE_AUTH_BASE}/signup`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password })
+    });
+    const signupData = await signupRes.json();
+    if (!signupRes.ok) {
+      errorEl.textContent = signupData.message || signupData.error || 'Something went wrong';
+      return;
+    }
+  }
+
+  const res = await fetch(`${BUTTERBASE_AUTH_BASE}/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password })
@@ -282,7 +304,7 @@ document.getElementById('authSubmit').onclick = async () => {
 
 document.getElementById('logoutLink').onclick = async (e) => {
   e.preventDefault();
-  await fetch('/api/auth/logout', { method: 'POST', headers: { 'Authorization': `Bearer ${authToken}` } });
+  await fetch(`${BUTTERBASE_AUTH_BASE}/logout`, { method: 'POST', headers: { 'Authorization': `Bearer ${authToken}` } });
   authToken = null;
   authEmail = null;
   localStorage.removeItem('authToken');
@@ -296,7 +318,7 @@ function authHeaders() {
 
 async function search() {
   const q = document.getElementById('q').value;
-  const res = await fetch(`/api/papers?q=${encodeURIComponent(q)}`, { headers: authHeaders() });
+  const res = await fetch(`${BUTTERBASE_FN_BASE}/search-papers?q=${encodeURIComponent(q)}`, { headers: authHeaders() });
   if (res.status === 401) { showAuth(); return; }
   const papers = await res.json();
   const container = document.getElementById('results');
@@ -321,10 +343,10 @@ async function search() {
 
 async function save(paperId, title) {
   const collectionName = document.getElementById('collectionName').value;
-  const res = await fetch('/api/save', {
+  const res = await fetch(`${BUTTERBASE_FN_BASE}/save-paper`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
-    body: JSON.stringify({ paperId, title, collectionName })
+    body: JSON.stringify({ paperId, title, collectionName, bypassPaywall: isPro })
   });
   if (res.status === 401) { showAuth(); return; }
   if (res.status === 402) {
@@ -337,7 +359,12 @@ async function save(paperId, title) {
 }
 
 document.getElementById('upgradeBtn').onclick = async () => {
-  await fetch('/api/upgrade', { method: 'POST', headers: authHeaders() });
+  // Demo-safe "upgrade": flips a local flag instead of charging a real card
+  // (Butterbase's Stripe Connect onboarding came back in LIVE mode with no
+  // test-mode toggle -- see README). save-paper's bypassPaywall path skips
+  // create-collection's quota check via a plain RLS-scoped insert.
+  isPro = true;
+  localStorage.setItem('isPro', 'true');
   document.getElementById('modal').style.display = 'none';
   if (pendingSave) {
     await save(pendingSave.paperId, pendingSave.title);
@@ -370,7 +397,7 @@ async function loadCollections() {
   list.innerHTML = '<p>Loading...</p>';
   let collections;
   try {
-    const res = await fetch('/api/collections', { headers: authHeaders() });
+    const res = await fetch(`${BUTTERBASE_API_BASE}/collections?order=created_at.desc`, { headers: authHeaders() });
     if (res.status === 401) { showAuth(); return; }
     if (!res.ok) {
       list.innerHTML = `<p style="color:var(--danger)">Error ${res.status}: ${await res.text()}</p>`;
@@ -420,9 +447,9 @@ async function loadCollections() {
 
     notesSaveBtn.onclick = async () => {
       notesSavedMsg.textContent = '';
-      const res = await fetch(`/api/collections/${c.id}`, {
+      const res = await fetch(`${BUTTERBASE_API_BASE}/collections/${c.id}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        headers: { 'Content-Type': 'application/json', 'Prefer': 'return=representation', ...authHeaders() },
         body: JSON.stringify({ notes: notesArea.value })
       });
       if (res.status === 401) { showAuth(); return; }
@@ -446,7 +473,7 @@ async function loadCollections() {
 
     deleteLink.onclick = async () => {
       if (!confirm(`Delete "${c.name}" and all papers in it?`)) return;
-      const res = await fetch(`/api/collections/${c.id}`, { method: 'DELETE', headers: authHeaders() });
+      const res = await fetch(`${BUTTERBASE_API_BASE}/collections/${c.id}`, { method: 'DELETE', headers: authHeaders() });
       if (res.status === 401) { showAuth(); return; }
       if (!res.ok) { alert(`Delete failed: ${res.status} ${await res.text()}`); return; }
       loadCollections();
@@ -457,7 +484,7 @@ async function loadCollections() {
 }
 
 async function renderCollectionPapers(collectionId, papersDiv) {
-  const r = await fetch(`/api/collections/${collectionId}/papers`, { headers: authHeaders() });
+  const r = await fetch(`${BUTTERBASE_API_BASE}/collection_papers?collection_id=eq.${collectionId}&order=added_at.desc`, { headers: authHeaders() });
   const papers = await r.json();
   papersDiv.innerHTML = papers.length
     ? papers.map(p => `
@@ -472,7 +499,7 @@ async function renderCollectionPapers(collectionId, papersDiv) {
 async function removePaper(itemId, collectionId, linkEl) {
   const papersDiv = linkEl.closest('.collectionPapers');
   try {
-    const res = await fetch(`/api/collection_papers/${itemId}`, { method: 'DELETE', headers: authHeaders() });
+    const res = await fetch(`${BUTTERBASE_API_BASE}/collection_papers/${itemId}`, { method: 'DELETE', headers: authHeaders() });
     if (res.status === 401) { showAuth(); return; }
     if (!res.ok) {
       alert(`Remove failed: ${res.status} ${await res.text()}`);
