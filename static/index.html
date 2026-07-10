@@ -235,12 +235,23 @@ let authToken = localStorage.getItem('authToken');
 let authEmail = localStorage.getItem('authEmail');
 let pendingSave = null;
 let authMode = 'login';
-let isPro = localStorage.getItem('isPro') === 'true';
+let isPro = false;
+
+// Pro-bypass state must be scoped per-user, not per-browser -- otherwise
+// clicking Upgrade on one account silently bypasses the paywall for every
+// other account that later logs into the same browser.
+function proStorageKey() {
+  return `isPro_${authEmail}`;
+}
+function loadProStatus() {
+  isPro = localStorage.getItem(proStorageKey()) === 'true';
+}
 
 function showApp() {
   document.getElementById('authBox').classList.add('hidden');
   document.getElementById('app').classList.remove('hidden');
   document.getElementById('userEmail').textContent = authEmail;
+  loadProStatus();
   search();
 }
 
@@ -364,7 +375,7 @@ document.getElementById('upgradeBtn').onclick = async () => {
   // test-mode toggle -- see README). save-paper's bypassPaywall path skips
   // create-collection's quota check via a plain RLS-scoped insert.
   isPro = true;
-  localStorage.setItem('isPro', 'true');
+  localStorage.setItem(proStorageKey(), 'true');
   document.getElementById('modal').style.display = 'none';
   if (pendingSave) {
     await save(pendingSave.paperId, pendingSave.title);
